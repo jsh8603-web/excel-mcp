@@ -33,7 +33,7 @@ haris-musa를 별도 MCP로 등록했다면 도구가 겹치지 않게 그 등�
 | [haris-musa/excel-mcp-server](https://github.com/haris-musa/excel-mcp-server) | 읽기, 일반 파일 편집, 피벗, 차트, 수식 추적, 목표값 찾기 | 2.2.6 |
 | [xlide_mcp](https://github.com/WilliamSmithEdward/xlide_mcp) (`xlide_*` 도구) | Power Query M 코드, **PQ 파일 편집**, VBA 읽기·편집 | 1.2.4 |
 | [formulon](https://github.com/libraz/formulon) | `xl_verify`(계산 검증), `xl_whatif`(민감도 분석) | 0.18.0 |
-| AppleScript | `pq_refresh`(Power Query 새로 고침, **미검증**) | — |
+| AppleScript | `pq_refresh`(Power Query 새로 고침, **검증**) | — |
 
 게이트웨이가 강제하는 안전 규칙:
 1. Power Query나 외부 연결이 있는 파일을 haris-musa 쓰기 도구로 저장하려 하면 거절하고 xlide 도구를 안내한다.
@@ -58,7 +58,7 @@ LAMBDA·MAP·SCAN은 haris-musa가 계산하지 못하고("uncalculated"), formu
 
 ## 할 수 없는 것
 
-- **Power Query 실행**: 엑셀에서 직접 해야 한다. `pq_refresh`는 Mac에서 아직 검증하지 않았다.
+- **Power Query 실행**: 엑셀에서 직접 해야 한다. `pq_refresh`는 Mac 검증 완료
 - **데이터 모델·Power Pivot·DAX**: Mac 엑셀에 없는 기능.
 - **엑셀에서 열린 파일의 저장 안 된 내용**: 파일 기반이라 보지 못한다.
 - **DRM·보안 라벨 파일**: 파일을 직접 열 수 없으면 실패한다.
