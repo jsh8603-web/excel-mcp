@@ -15,8 +15,11 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import platform
+import re
+import struct
 import subprocess
 import sys
 import zipfile
@@ -132,6 +135,50 @@ def is_open(path: Path) -> bool:
     return any((path.parent / x).exists() for x in {"~$" + n, "~$" + n[2:]})
 
 
+HANGUL = re.compile("[ᄀ-ᇿ㄰-㆏가-힯]")
+KOREAN_WRITE_TOOLS = {"xlide_write_module", "xlide_edit_module", "xlide_import_modules",
+                      "xlide_manage_form", "xlide_edit_form"}  # VBA 소스·폼 캡션을 쓰는 xlide 도구
+
+
+def korean_codepage(path: Path) -> None:
+    """새 VBA 프로젝트는 코드페이지 1252 라서 한글이 '?' 로 저장된다(2026-11 실측).
+
+    기존 모듈이 전부 ASCII 일 때만 949 로 바꾼다 (유럽 문자가 든 프로젝트는 건드리지 않는다).
+    실패해도 원래 흐름을 막지 않는다."""
+    if path.suffix.lower() not in (".xlsm", ".xltm") or not path.exists():
+        return
+    try:
+        import pyopenvba
+        with pyopenvba.ExcelFile(path) as book:
+            if not book.has_vba_project():
+                return
+            proj = book.vba_project()
+            old = struct.pack("<HIH", 0x0003, 2, 1252)  # PROJECTCODEPAGE 레코드
+            if proj.code_page != 1252 or old not in proj.dir_raw or any(not m.source.isascii() for m in proj.modules):
+                return
+            proj.dir_raw = proj.dir_raw.replace(old, struct.pack("<HIH", 0x0003, 2, 949), 1)
+            proj.code_page = 949
+            proj.dir_structure_dirty = True
+            book.save()
+    except Exception as exc:  # noqa: BLE001
+        print(f"[xlkit] 코드페이지 949 전환 실패({path.name}): {exc}", file=sys.stderr)
+
+
+def needs_korean(name: str, args: dict) -> bool:
+    if name not in KOREAN_WRITE_TOOLS:
+        return False
+    if HANGUL.search(json.dumps(args, ensure_ascii=False)):
+        return True
+    folder = args.get("source_folder")
+    if name == "xlide_import_modules" and isinstance(folder, str):
+        try:
+            return any(HANGUL.search(f.read_text("utf-8", errors="ignore")) for f in resolve(folder).iterdir()
+                       if f.suffix.lower() in (".bas", ".cls", ".frm"))
+        except OSError:
+            return False
+    return False
+
+
 def error(text: str) -> types.CallToolResult:
     return types.CallToolResult(content=[types.TextContent(type="text", text=text)], is_error=True)
 
@@ -235,7 +282,14 @@ class Gateway:
                                  "같은 작업을 xlide 도구로 하세요: 셀 xlide_write_cells, 서식 xlide_format_cells, "
                                  "표 xlide_manage_table, 이름 xlide_manage_name, 행·열 xlide_manage_rows_columns, "
                                  "시트 xlide_manage_sheet, M 코드 xlide_write_query.")
-        return await self.sessions[key].call_tool(name, args)
+        if needs_korean(name, args):
+            for path in excel_paths(args):
+                await anyio.to_thread.run_sync(korean_codepage, path)
+        result = await self.sessions[key].call_tool(name, args)
+        if name == "xlide_create_project" and not result.is_error:
+            for path in excel_paths(args):
+                await anyio.to_thread.run_sync(korean_codepage, path)
+        return result
 
 
 async def main() -> None:
